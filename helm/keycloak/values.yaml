@@ -1,0 +1,43 @@
+ingress:
+  enabled: true
+  ingressClassName: nginx
+  annotations:
+     nginx.ingress.kubernetes.io/ssl-redirect: "true"
+     cert-manager.io/cluster-issuer: letsencrypt-issuer
+  tls: true
+  hostname: "" # Will be dynamically set via --set in helm command
+
+postgresql:
+  enabled: true
+  auth:
+    username: admin
+    password: admin
+    database: bitnami_keycloak
+  primary:
+    persistence:
+      enabled: false
+
+metrics:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      release: prometheus-operator
+
+extraEnvVars:
+  - name: KC_METRICS_ENABLED
+    value: "true"
+  - name: KC_HTTP_METRICS_HISTOGRAMS_ENABLED
+    value: "true"
+  - name: KC_HTTP_METRICS_SLOS
+    value: "5,10,25,50,250,500,1000,2500,5000,10000"
+  - name: KC_CACHE_METRICS_HISTOGRAMS_ENABLED
+    value: "true"
+  - name: KC_HEALTH_ENABLED
+    value: "true"
+  - name: KC_FEATURES
+    value: "user-event-metrics,admin-fine-grained-authz"
+  - name: KC_EVENT_METRICS_ENABLED
+    value: "true"
+  - name: KC_EVENT_METRICS_USER_EVENTS
+    value: "login,logout,register,refresh_token,update_profile,reset_password,update_credential,update_email,delete_account,verify_profile"

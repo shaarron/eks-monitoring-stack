@@ -1,0 +1,5 @@
+apiVersion: v2
+name: clusterissuer
+description: Custom Helm chart for cert-manager ClusterIssuer, created to enable dynamic email injection from GitHub Actions workflows — addressing the lack of an official chart for this resource.
+version: 0.1.0
+appVersion: v1
