@@ -1,0 +1,114 @@
+# Reusable Workflow: Executes Terraform init, validate, plan, and apply for any AWS module.
+# Supports backend config, optional state unlock, and passes dynamic variables like domain, EKS cluster name, and Route 53 target.
+name: Reusable - Terraform AWS setup
+
+on:
+  workflow_call:
+    inputs:
+      force-unlock:
+        description: 'Force unlock Terraform state'
+        type: boolean
+        default: false
+      skip-backend-config:
+        description: 'Skip backend configuration during terraform init'
+        type: boolean
+        default: false
+      tf-state-bucket:
+        description: 'Terraform state bucket name'
+        type: string
+        required: true
+      tf-state-key:
+        description: 'Terraform state path'
+        type: string
+        required: true
+      aws-region:
+        required: true
+        type: string
+      working-dir:
+        required: true
+        type: string
+      eks-cluster-name:
+        type: string
+      target:
+        description: 'The CNAME target'
+        type: string
+      domain-name:
+        type: string
+      sub-domains:
+        type: string
+
+    secrets:
+      aws-access-key-id:
+        required: true
+      aws-secret-access-key:
+        required: true
+
+
+jobs:
+  terraform-aws-setup-deploy:
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_aws_region:               ${{ inputs.aws-region }}
+      TF_VAR_tf_state_bucket:          ${{ inputs.tf-state-bucket }}
+      TF_VAR_tf_state_key:             ${{ inputs.tf-state-key }}
+      TF_VAR_domain_name:              ${{ inputs.domain-name }}
+      TF_VAR_eks_cluster_name:         ${{ inputs.eks-cluster-name }}
+      TF_VAR_target:                   ${{ inputs.target }}
+      TF_VAR_sub_domains:              ${{ inputs.sub-domains }}
+
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Terraform init
+        working-directory: ${{ inputs.working-dir }}
+        run: |
+          if [ "${{ inputs.skip-backend-config }}" = "true" ]; then
+            terraform init 
+          else
+            terraform init -reconfigure \
+              -backend-config="bucket=${{ inputs.tf-state-bucket }}" \
+              -backend-config="key=${{ inputs.tf-state-key }}" \
+              -backend-config="region=${{ inputs.aws-region }}" \
+              -backend-config="dynamodb_table=terraform-lock" \
+              -backend-config="encrypt=true"
+          fi
+
+      - name: Terraform Validate
+        working-directory: ${{ inputs.working-dir }}
+        run: terraform validate
+
+      - name: Terraform Format Check
+        working-directory: ${{ inputs.working-dir }}
+        run: terraform fmt -check -diff || (echo "Terraform files are not formatted correctly! fix and rerun this job" && exit 1)
+
+      - name: Terraform Plan
+        working-directory: ${{ inputs.working-dir }}
+        run: |
+          if [ "${{ inputs.force-unlock }}" = "true" ]; then
+            terraform plan -out=tfplan -lock=false
+          else
+            terraform plan -out=tfplan
+          fi
+
+      - name: Apply Terraform Configuration
+        working-directory: ${{ inputs.working-dir }}
+        run: |
+          if [ "${{ inputs.force-unlock }}" = "true" ]; then
+            terraform apply -auto-approve -lock=false
+          else
+            terraform apply -auto-approve
+          fi

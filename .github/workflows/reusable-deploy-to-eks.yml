@@ -1,0 +1,122 @@
+# Reusable Workflow: Deploys a full monitoring stack (Cert Manager, Prometheus, Grafana, Keycloak) to an EKS cluster using Helm,
+# Includes setting up ingress via NGINX, TLS via Let's Encrypt, and returns the NLB hostname for DNS configuration.
+name: Reusable - Deploy to EKS
+
+on:
+  workflow_call:
+    inputs:
+      aws-region:
+        required: true
+        type: string
+      eks-cluster-name:
+        required: true
+        type: string
+      domain-name:
+        required: true
+        type: string
+    secrets:
+      aws-access-key-id:
+        required: true
+      aws-secret-access-key:
+        required: true
+      letsencrypt-email:
+        required: true
+    outputs:
+      nlb_host:
+        description: "The NLB hostname for DNS configuration"
+        value: ${{ jobs.deploy-to-eks.outputs.nlb_host }}
+
+
+jobs:
+  deploy-to-eks:
+    runs-on: ubuntu-latest
+    outputs:
+      nlb_host: ${{ steps.get-nlb.outputs.nlb_host }}
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          aws-region: ${{ inputs.aws-region }}
+
+      - name: Update kubeconfig for EKS
+        run: aws eks update-kubeconfig --name ${{ inputs.eks-cluster-name }} --region ${{ inputs.aws-region }}
+
+      - name: Add Helm repositories
+        run: |
+          helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+          helm repo add ingress-nginx https://kubernetes.github.io/ingress-nginx
+          helm repo add bitnami  https://charts.bitnami.com/bitnami
+          helm repo add jetstack https://charts.jetstack.io
+#install CRDs separately (as per jetstack docs)
+      - name: Install Cert Manager CRDs
+        run: |
+          kubectl get crd certificates.cert-manager.io >/dev/null 2>&1 || \
+          kubectl apply -f https://github.com/cert-manager/cert-manager/releases/download/v1.14.3/cert-manager.crds.yaml 
+
+      - name: Install Cert Manager
+        run: |
+          helm upgrade --install cert-manager jetstack/cert-manager \
+          --namespace cert-manager \
+          --create-namespace \
+          --set installCRDs=false \
+          --version v1.17.2
+
+      - name: Install cert-manager ClusterIssuer
+        run: | 
+          helm upgrade --install clusterissuer ./helm/letsencrypt-clusterissuer \
+          --namespace cert-manager \
+          --create-namespace \
+          --set email=${{ secrets.letsencrypt-email }}
+
+      - name: Install Kube Prometheus Stack
+        working-directory: ./helm/kube-prometheus-stack/
+        env:
+          DOMAIN_NAME: ${{ inputs.domain-name }}
+        run: |
+          helm upgrade --install prometheus-operator prometheus-community/kube-prometheus-stack \
+          --namespace monitoring \
+          --create-namespace \
+          --values values.yaml \
+          --version 70.4.2 \
+          --set prometheus.ingress.hosts[0]="prom.$DOMAIN_NAME" \
+          --set prometheus.ingress.tls[0].hosts[0]="prom.$DOMAIN_NAME" \
+          --set prometheus.prometheusSpec.externalUrl="https://prom.$DOMAIN_NAME" \
+          --set grafana.ingress.hosts[0]="grafana.$DOMAIN_NAME" \
+          --set grafana.ingress.tls[0].hosts[0]="grafana.$DOMAIN_NAME" \
+
+      - name: Wait for Prometheus Operator to be ready
+        run: kubectl rollout status deployment prometheus-operator-kube-p-operator -n monitoring
+
+      - name: Install Ingress NGINX
+        working-directory: ./helm/ingress-nginx/
+        run: |
+          helm upgrade --install nginx-ing ingress-nginx/ingress-nginx \
+          --namespace ingress \
+          --create-namespace \
+          --values values.yaml \
+          --version 4.12.1 
+
+      - name: Wait for Ingress NGINX to be ready
+        run: |
+          kubectl rollout status deployment nginx-ing-ingress-nginx-controller -n ingress
+
+      - name: Get NLB hostname
+        id: get-nlb
+        run: |
+          NLB_HOST=$(kubectl get svc nginx-ing-ingress-nginx-controller \
+            -n ingress \
+            -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          echo "nlb_host=$NLB_HOST" >> $GITHUB_OUTPUT
+
+      - name: Install Keycloak
+        working-directory: ./helm/keycloak/
+        run: |
+          helm upgrade --install keycloak bitnami/keycloak \
+          --values values.yaml \
+          --set ingress.hostname="keycloak.${{ inputs.domain-name }}" \
+          --version 24.5.1

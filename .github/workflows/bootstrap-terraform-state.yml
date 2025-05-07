@@ -1,0 +1,18 @@
+# Terraform State Bootstrap: Initializes the S3 backend and DynamoDB table for Terraform state management (run once before other plans).
+name: Terraform State Bootstrap
+
+on:
+  workflow_dispatch:
+
+jobs:
+  setup-terraform-state:
+    uses: ./.github/workflows/reusable-terraform-aws-setup.yml
+    with:
+      working-dir: './terraform/terraform-state/'
+      tf-state-bucket: ${{ vars.TF_STATE_BUCKET }}
+      aws-region: ${{ vars.AWS_REGION }}
+      skip-backend-config: true
+      tf-state-key: '' # intentionally blank for bootstrap step
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

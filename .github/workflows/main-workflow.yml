@@ -1,0 +1,54 @@
+# Provisions EKS infrastructure, deploys Keycloak/Prometheus/Grafana to the cluster, and updates Route 53 DNS.
+name: Main Workflow
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      force-unlock:
+        description: 'Force unlock Terraform state'
+        type: boolean
+        default: false
+
+jobs:
+  setup-eks-infra:
+    uses: ./.github/workflows/reusable-terraform-aws-setup.yml
+    with:
+      working-dir: './terraform/eks-infra/'
+      tf-state-key: 'vpc-eks/terraform.tfstate'
+      tf-state-bucket: ${{ vars.TF_STATE_BUCKET }}
+      aws-region: ${{ vars.AWS_REGION }}
+      eks-cluster-name: ${{ vars.EKS_CLUSTER_NAME }}
+      domain-name: ${{ vars.DOMAIN_NAME }}
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+
+  deploy-to-eks:
+    needs: setup-eks-infra
+    uses: ./.github/workflows/reusable-deploy-to-eks.yml
+    with:
+      aws-region: ${{ vars.AWS_REGION }}
+      domain-name: ${{ vars.DOMAIN_NAME }}
+      eks-cluster-name: ${{ vars.EKS_CLUSTER_NAME }}
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+      letsencrypt-email: ${{ secrets.LETSENCRYPT_EMAIL }}
+
+  update-route53-record:
+    needs: deploy-to-eks
+    uses: ./.github/workflows/reusable-terraform-aws-setup.yml
+    with:
+      working-dir: './terraform/route53/'
+      tf-state-key: 'route-53/terraform.tfstate'
+      sub-domains: '["keycloak","grafana","prom"]'
+      domain-name: ${{ vars.DOMAIN_NAME }}
+      tf-state-bucket: ${{ vars.TF_STATE_BUCKET }}
+      aws-region: ${{ vars.AWS_REGION }}
+      target: ${{ needs.deploy-to-eks.outputs.nlb_host }}
+    secrets:
+      aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+      aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}

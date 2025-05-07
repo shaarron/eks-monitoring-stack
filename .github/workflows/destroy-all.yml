@@ -1,0 +1,95 @@
+# Destroy All Workflow: Destroys all resources including EKS, Route 53 records, Helm releases,
+# and deletes the Terraform backend (S3 + DynamoDB).
+name: Destroy All
+
+on:
+  workflow_dispatch:
+
+jobs:
+  destroy-all:
+    runs-on: ubuntu-latest
+    env:
+      TF_VAR_aws_region: ${{ vars.AWS_REGION }}
+      TF_VAR_eks_cluster_name: ${{ vars.EKS_CLUSTER_NAME }}
+
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v3
+
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v2
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.6.0
+
+      - name: Update kubeconfig
+        run: |
+          aws eks update-kubeconfig --name ${{ vars.EKS_CLUSTER_NAME }} --region ${{ vars.AWS_REGION }}
+
+      - name: Get NLB hostname
+        id: get-nlb
+        run: |
+          GET_NLB_HOST=$(kubectl get svc nginx-ing-ingress-nginx-controller -n ingress -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          echo "NLB_HOST=$GET_NLB_HOST" >> $GITHUB_ENV
+
+      - name: Destroy Route53
+        working-directory: ./terraform/route53
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=route-53/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-lock" \
+            -backend-config="encrypt=true"
+          
+          terraform destroy -auto-approve -lock=false \
+            -var="target=${{ env.NLB_HOST }}" \
+            -var="domain_name=${{ vars.DOMAIN_NAME }}" \
+            -var="aws_region=${{ vars.AWS_REGION }}" \
+            -var='sub_domains=["keycloak","grafana","prom"]'
+
+# Uninstall the ingress controller to clean up the AWS NLB it created, since it's not tracked in the Terraform state
+      - name: Delete NGINX Controller
+        working-directory: ./helm/ingress-nginx/
+        run: |
+          helm uninstall nginx-ing -n ingress 
+
+      - name: Destroy EKS Stack
+        working-directory: ./terraform/eks-infra
+        run: |
+          terraform init \
+            -backend-config="bucket=${{ vars.TF_STATE_BUCKET }}" \
+            -backend-config="key=vpc-eks/terraform.tfstate" \
+            -backend-config="region=${{ vars.AWS_REGION }}" \
+            -backend-config="dynamodb_table=terraform-lock" \
+            -backend-config="encrypt=true"
+          terraform destroy -auto-approve -lock=false
+
+# Clean up Terraform backend: empty and delete S3 & delete the DynamoDB lock table
+      - name: Empty the backend S3 bucket
+        run: |
+          BUCKET_NAME="${{ vars.TF_STATE_BUCKET }}"
+          echo "Deleting all objects from $BUCKET_NAME..."
+          aws s3 rm s3://$BUCKET_NAME --recursive
+        continue-on-error: true
+
+      - name: Delete the dynamodb table
+        run: |
+          TABLE_NAME="terraform-lock"
+          echo "Deleting $TABLE_NAME..."
+          aws dynamodb delete-table --table-name $TABLE_NAME
+          aws dynamodb wait table-not-exists --table-name $TABLE_NAME
+
+      - name: Delete the backend S3 bucket
+        run: |
+          BUCKET_NAME="${{ vars.TF_STATE_BUCKET }}"
+          echo "Deleting bucket $BUCKET_NAME..."
+          aws s3 rb s3://$BUCKET_NAME --force
+
+
