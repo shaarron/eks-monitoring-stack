@@ -105,14 +105,6 @@ jobs:
         run: |
           kubectl rollout status deployment nginx-ing-ingress-nginx-controller -n ingress
 
-      - name: Get NLB hostname
-        id: get-nlb
-        run: |
-          NLB_HOST=$(kubectl get svc nginx-ing-ingress-nginx-controller \
-            -n ingress \
-            -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
-          echo "nlb_host=$NLB_HOST" >> $GITHUB_OUTPUT
-
       - name: Install Keycloak
         working-directory: ./helm/keycloak/
         run: |
@@ -120,3 +112,11 @@ jobs:
           --values values.yaml \
           --set ingress.hostname="keycloak.${{ inputs.domain-name }}" \
           --version 24.5.1
+
+      - name: Get NLB hostname
+        id: get-nlb
+        run: |
+          NLB_HOST=$(kubectl get svc nginx-ing-ingress-nginx-controller \
+            -n ingress \
+            -o jsonpath="{.status.loadBalancer.ingress[0].hostname}")
+          echo "nlb_host=$NLB_HOST" >> $GITHUB_OUTPUT
