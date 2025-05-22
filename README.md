@@ -40,7 +40,7 @@ This project demonstrates a fully automated CI/CD, web-accessible monitoring env
 
 ### Diagrams
 #### EKS & VPC Architecture Diagram
-<img alt="eks-vpc_diagram" src="eks_vpc_diagram.png" width="700" height="auto"/>
+<img alt="eks-vpc-diagram" src="eks_vpc_diagram.svg" width="auto" height="auto"/>
 
 ### GitHub Actions
   - **Terraform State Bootstrap** - A prerequisite - Sets up the S3 bucket & DynamoDB table for Terraform state.
