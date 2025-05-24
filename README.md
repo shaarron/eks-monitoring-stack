@@ -25,6 +25,9 @@ This project demonstrates a fully automated CI/CD, web-accessible monitoring env
 
 ## Table of Contents
 * [Architecture](#Architecture)
+    * [Diagrams](#diagrams)
+      * [Overall Architecture Diagram](#overall-architecture-diagram)
+      * [EKS & VPC In-Depth Diagram](#eks--vpc-in-depth--architecture-diagram)
     * [GitHub Actions](#github-actions)
     * [Terraform - AWS Resources](#terraform-provisioned-aws-resources)
     * [Helm-Based Deployments](#helm-based-deployments)
@@ -39,7 +42,11 @@ This project demonstrates a fully automated CI/CD, web-accessible monitoring env
 ## Architecture
 
 ### Diagrams
-#### EKS & VPC Architecture Diagram
+#### Overall Architecture Diagram
+<img alt="overall-architecture-diagram" src="overall-archi-diagram.svg" width="700" height="auto"/>
+
+
+#### EKS & VPC In-Depth  Architecture Diagram
 <img alt="eks-vpc-diagram" src="eks_vpc_diagram.svg" width="700" height="auto"/>
 
 ### GitHub Actions
