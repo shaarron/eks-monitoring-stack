@@ -5,3 +5,7 @@ variable "tf_state_bucket" {
 variable "aws_region" {
   type = string
 }
+
+variable "aws_account_id" {
+  type = string
+}
