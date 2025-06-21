@@ -21,7 +21,8 @@ resource "aws_iam_role" "github_actions_oidc" {
         Action = "sts:AssumeRoleWithWebIdentity"
         Condition = {
           StringEquals = {
-            "token.actions.githubusercontent.com:sub" = "repo:shaarron/eks-monitoring-stack:ref:refs/heads/main"
+            "token.actions.githubusercontent.com:sub" = "repo:shaarron/eks-monitoring-stack:*"
+            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
           }
         }
       }
