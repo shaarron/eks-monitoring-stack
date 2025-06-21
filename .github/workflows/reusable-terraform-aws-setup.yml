@@ -42,6 +42,11 @@ on:
         required: true
       aws-secret-access-key:
         required: true
+      aws-role-to-assume:
+        required: true
+      aws-account-id:
+        required: true
+
 
 
 jobs:
@@ -49,6 +54,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_VAR_aws_region:               ${{ inputs.aws-region }}
+      TF_VAR_aws_account_id:           ${{ inputs.aws-account-id }}
       TF_VAR_tf_state_bucket:          ${{ inputs.tf-state-bucket }}
       TF_VAR_tf_state_key:             ${{ inputs.tf-state-key }}
       TF_VAR_domain_name:              ${{ inputs.domain-name }}
