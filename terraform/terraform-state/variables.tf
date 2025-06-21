@@ -5,3 +5,4 @@ variable "tf_state_bucket" {
 variable "aws_region" {
   type = string
 }
+

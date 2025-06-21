@@ -42,6 +42,8 @@ on:
         required: true
       aws-secret-access-key:
         required: true
+      aws-role-to-assume:
+        required: true
 
 
 jobs:
@@ -49,6 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     env:
       TF_VAR_aws_region:               ${{ inputs.aws-region }}
+      TF_VAR_aws_account_id:           ${{ inputs.aws-account-id }}
       TF_VAR_tf_state_bucket:          ${{ inputs.tf-state-bucket }}
       TF_VAR_tf_state_key:             ${{ inputs.tf-state-key }}
       TF_VAR_domain_name:              ${{ inputs.domain-name }}
@@ -66,11 +69,18 @@ jobs:
         with:
           terraform_version: 1.6.0
 
-      - name: Configure AWS Credentials
+#      - name: Configure AWS Credentials
+#        uses: aws-actions/configure-aws-credentials@v4
+#        with:
+#          aws-access-key-id: ${{ secrets.aws-access-key-id }}
+#          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+#          aws-region: ${{ inputs.aws-region }}
+
+
+      - name: Configure AWS credentials (OIDC)
         uses: aws-actions/configure-aws-credentials@v4
         with:
-          aws-access-key-id: ${{ secrets.aws-access-key-id }}
-          aws-secret-access-key: ${{ secrets.aws-secret-access-key }}
+          role-to-assume: ${{ secrets.aws-role-to-assume }}
           aws-region: ${{ inputs.aws-region }}
 
       - name: Terraform init
