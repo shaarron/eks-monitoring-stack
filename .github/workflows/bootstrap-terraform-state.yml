@@ -6,6 +6,10 @@ on:
 
 jobs:
   setup-terraform-state:
+    permissions:
+      id-token: write
+      contents: read
+
     uses: ./.github/workflows/reusable-terraform-aws-setup.yml
     with:
       working-dir: './terraform/terraform-state/'
@@ -14,7 +18,7 @@ jobs:
       skip-backend-config: true
       tf-state-key: '' # intentionally blank for bootstrap step
     secrets:
-      aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME}}
+      aws-role-to-assume: ${{ secrets.AWS_ROLE_TO_ASSUME }}
       aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
       aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
       aws-account-id: ${{ secrets.AWS_ACCOUNT_ID }}
