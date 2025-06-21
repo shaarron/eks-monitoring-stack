@@ -7,57 +7,6 @@ resource "aws_s3_bucket" "tf_state_bucket" {
   force_destroy = true
 }
 
-resource "aws_iam_role" "github_actions_oidc" {
-  name = "github-actions-oidc-role"
-
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect = "Allow"
-        Principal = {
-          Federated = "arn:aws:iam::${var.aws_account_id}:oidc-provider/token.actions.githubusercontent.com"
-        }
-        Action = "sts:AssumeRoleWithWebIdentity"
-        Condition = {
-          StringEquals = {
-            "token.actions.githubusercontent.com:sub" = "repo:shaarron/eks-monitoring-stack:*",
-            "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
-          }
-        }
-      }
-    ]
-  })
-}
-
-
-resource "aws_iam_role_policy" "github_actions_permissions" {
-  name = "github-actions-eks-terraform-policy"
-  role = aws_iam_role.github_actions_oidc.name
-
-  policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Effect   = "Allow"
-        Action   = [
-          "eks:*",
-          "vpc:*",
-          "dynamodb:*",
-          "ec2:*",
-          "iam:*",
-          "s3:*",
-          "route53:*",
-          "logs:*",
-          "cloudformation:*",
-          "sts:GetCallerIdentity"
-        ]
-        Resource = "*"
-      }
-    ]
-  })
-}
-
 resource "aws_s3_bucket_public_access_block" "block_public_access" {
   bucket = aws_s3_bucket.tf_state_bucket.id
 
