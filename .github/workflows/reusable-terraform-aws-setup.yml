@@ -44,9 +44,6 @@ on:
         required: true
       aws-role-to-assume:
         required: true
-      aws-account-id:
-        required: true
-
 
 
 jobs:
